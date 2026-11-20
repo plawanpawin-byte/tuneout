@@ -70,6 +70,12 @@
     table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
     lock: 'M6 11h12v9H6zM8 11V8a4 4 0 018 0v3',
     unlock: 'M6 11h12v9H6zM8 11V8a4 4 0 017.5-2',
+    templ: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+    flag: 'M5 21V4M5 4h12l-2 4 2 4H5',
+    people: 'M9 11a3 3 0 100-6 3 3 0 000 6zM3 20a6 6 0 0112 0M16 5a3 3 0 010 6M18 20a6 6 0 00-3-5',
+    panl: 'M4 5h16v14H4zM9.5 5v14',
+    panr: 'M4 5h16v14H4zM14.5 5v14',
+    reset: 'M4 12a8 8 0 108-8M4 4v5h5',
     eyeoff: 'M3 3l18 18M10.6 6.1A10 10 0 0112 6c6 0 10 6 10 6a17 17 0 01-3 3.6M6.6 6.6C3.8 8.3 2 12 2 12s4 7 10 7a9.7 9.7 0 004.4-1',
   };
   const MAP = {
@@ -86,6 +92,7 @@
     'Check for updates': 'refresh', 'Info': 'info', 'Merge': 'merge', 'Rotate L': 'rotl', 'Rotate R': 'rotr', 'Blank': 'blank', 'Extract': 'extract',
     'Front': 'front', 'Back': 'back', 'Close gaps': 'gaps', 'Title text': 'title', 'Dashed': 'dashed', 'Arrow on/off': 'arrow', 'Straight / Elbow': 'elbow', 'Edit label': 'label',
     'Cut': 'scissors', 'Trim to selection': 'fit', 'Locate missing files': 'search',
+    'Templates': 'templ', 'Cover': 'blank', 'Present': 'play', 'Set baseline': 'flag', 'Clear baseline': 'clear', 'Resources': 'people',
   };
   const LMAP = { 'Hide': 'eye', 'Show': 'eyeoff', 'Lock': 'unlock', 'Unlock': 'lock' };
   function icon(name) {
@@ -123,13 +130,110 @@
     bar.querySelectorAll(':scope > .btn').forEach((b) => b.classList.toggle('minor', MINOR.has((b.textContent || '').trim())));
     for (const c of ['c1', 'c2', 'c3']) { if (bar.scrollWidth <= bar.clientWidth + 1) break; bar.classList.add(c); }
   }
+  // ---- workspace: resizable and collapsible side panels, label toggle, remembered per app ----
+  const WSK = 'lk.ws.' + (document.title || 'app');
+  let ws = { lbl: false, w: {}, c: {} };
+  try { const r = JSON.parse(localStorage.getItem(WSK) || 'null'); if (r && typeof r === 'object') ws = Object.assign(ws, r); } catch (e) { /* storage may be unavailable */ }
+  if (!ws.w || typeof ws.w !== 'object') ws.w = {};
+  if (!ws.c || typeof ws.c !== 'object') ws.c = {};
+  function wsSave() { try { localStorage.setItem(WSK, JSON.stringify(ws)); } catch (e) { /* ignore */ } }
+  const sideOf = (sb) => (sb.classList.contains('right') ? 'right' : 'left');
+  const wsClamp = (w) => Math.max(140, Math.min(Math.max(200, Math.min(560, Math.round(window.innerWidth * 0.45))), Math.round(w)));
+  let lastToggle = 0;
+  function wsPoke() { window.dispatchEvent(new Event('resize')); }
+  function wsToggle(side) { ws.c[side] = !ws.c[side]; lastToggle = Date.now(); wsSave(); sweep(); wsPoke(); }
+  function wsBind(g) {
+    const box = () => [...document.querySelectorAll('.sidebar')].find((s) => sideOf(s) === g.dataset.side && (g.dataset.side === 'left' ? s.nextElementSibling === g : s.previousElementSibling === g));
+    g.addEventListener('pointerdown', (e) => {
+      const side = g.dataset.side, sb = box();
+      if (e.button !== 0 || !sb || ws.c[side]) return;
+      e.preventDefault();
+      const x0 = e.clientX, w0 = sb.getBoundingClientRect().width;
+      try { g.setPointerCapture(e.pointerId); } catch (_) {} g.classList.add('drag'); document.body.classList.add('gripping');
+      let raf = 0;
+      const mv = (ev) => {
+        if (ev.buttons === 0) { up(); return; }
+        const dx = ev.clientX - x0, w = wsClamp(side === 'left' ? w0 + dx : w0 - dx);
+        ws.w[side] = w; sb.style.width = w + 'px';
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; wsPoke(); });
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        g.classList.remove('drag'); document.body.classList.remove('gripping'); wsSave();
+      };
+      window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    });
+    g.addEventListener('click', () => { if (ws.c[g.dataset.side]) wsToggle(g.dataset.side); });
+    g.addEventListener('dblclick', () => { if (Date.now() - lastToggle > 500) wsToggle(g.dataset.side); });
+    g.addEventListener('keydown', (e) => {
+      const side = g.dataset.side, sb = box();
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wsToggle(side); return; }
+      if (!sb || ws.c[side] || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      e.preventDefault();
+      const step = (e.shiftKey ? 48 : 12) * (e.key === 'ArrowRight' ? 1 : -1) * (side === 'left' ? 1 : -1);
+      const w = wsClamp(sb.getBoundingClientRect().width + step);
+      ws.w[side] = w; sb.style.width = w + 'px'; wsSave(); wsPoke();
+    });
+  }
+  function wsGrip(sb) {
+    const side = sideOf(sb), nb = side === 'left' ? sb.nextElementSibling : sb.previousElementSibling;
+    let g = nb && nb.classList && nb.classList.contains('grip') ? nb : null;
+    if (!g) {
+      g = document.createElement('div'); g.className = 'grip'; g.dataset.side = side; g.tabIndex = 0;
+      g.setAttribute('role', 'separator'); g.setAttribute('aria-orientation', 'vertical'); g.setAttribute('aria-label', side + ' panel');
+      g.title = 'Drag to resize. Double-click to collapse (click to restore).';
+      if (side === 'left') sb.after(g); else sb.before(g);
+      wsBind(g);
+    }
+    g.classList.toggle('collapsed', !!ws.c[side]);
+  }
+  function wsDock() {
+    let d = document.querySelector('body > .wbs');
+    const has = !!document.querySelector('.app > .status');
+    if (!d) {
+      d = document.createElement('div'); d.className = 'wbs';
+      const mk = (id, tip, content) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'wb'; b.dataset.id = id; b.title = tip; b.setAttribute('aria-label', tip);
+        if (typeof content === 'string') b.textContent = content; else b.append(content);
+        d.append(b); return b;
+      };
+      mk('lbl', 'Show or hide toolbar labels', 'Aa').addEventListener('click', () => { ws.lbl = !ws.lbl; wsSave(); sweep(); });
+      mk('left', 'Show or hide the left panel', icon('panl')).addEventListener('click', () => wsToggle('left'));
+      mk('right', 'Show or hide the right panel', icon('panr')).addEventListener('click', () => wsToggle('right'));
+      mk('reset', 'Reset the workspace layout', icon('reset')).addEventListener('click', () => {
+        ws.w = {}; ws.c = {}; ws.lbl = false; wsSave();
+        document.querySelectorAll('.sidebar').forEach((sb) => { if (sb.dataset.w0 !== undefined) sb.style.width = sb.dataset.w0; });
+        sweep(); wsPoke();
+      });
+      document.body.append(d);
+    }
+    d.hidden = !has; document.body.classList.toggle('hasdock', has);
+    const sides = new Set([...document.querySelectorAll('.sidebar')].map(sideOf));
+    d.querySelector('[data-id=lbl]').classList.toggle('on', !!ws.lbl);
+    for (const s of ['left', 'right']) {
+      const b = d.querySelector('[data-id=' + s + ']');
+      b.hidden = !sides.has(s); b.classList.toggle('on', !!ws.c[s]);
+    }
+  }
+  function workspace() {
+    document.querySelectorAll('.sidebar').forEach((sb) => {
+      const side = sideOf(sb);
+      if (sb.dataset.w0 === undefined) sb.dataset.w0 = sb.style.width || '';
+      const w = ws.w[side];
+      if (w && sb.style.width !== w + 'px') sb.style.width = w + 'px';
+      sb.classList.toggle('collapsed', !!ws.c[side]);
+      wsGrip(sb);
+    });
+    wsDock();
+  }
   window.addEventListener('resize', () => { const bar = document.querySelector('.app > .toolbar'); if (bar) fitBar(bar); });
   let queued = false;
   function sweep() {
     queued = false;
     document.querySelectorAll('.btn').forEach(decorate);
     const bar = document.querySelector('.app > .toolbar');
-    if (bar && bar.children.length) { brand(bar); fitBar(bar); }
+    if (bar && bar.children.length) { brand(bar); bar.classList.toggle('lbl', !!ws.lbl); fitBar(bar); }
+    workspace();
   }
   const mo = new MutationObserver(() => { if (!queued) { queued = true; requestAnimationFrame(sweep); } });
   function start() { mo.observe(document.body, { childList: true, subtree: true, characterData: true }); sweep(); }
