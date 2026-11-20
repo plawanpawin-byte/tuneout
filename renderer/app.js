@@ -307,7 +307,7 @@ async function doExport(kind, onlySel) {
   try {
     toast('Saving...');
     if (kind === 'wav') await window.host.writeFile(dest.id, wavBytes(a, b));
-    else { const t = await window.host.tempFile(wavBytes(a, b), 'wav'); await window.host.run({ args: ['-i', '{in0}', ...OUT[kind][1], '{out}'], inputs: [t.id], out: dest.id }); window.host.removeFile(t.id); }
+    else { const t = await window.host.tempFile(wavBytes(a, b), 'wav'); try { await window.host.run({ args: ['-i', '{in0}', ...OUT[kind][1], '{out}'], inputs: [t.id], out: dest.id }); } finally { window.host.removeFile(t.id); } }
     toast('Saved ' + dest.name); dirty = false; renderStatus();
   } catch (e) { toast('Save failed: ' + String(e.message || e).split('\n').pop().slice(0, 80)); }
 }
