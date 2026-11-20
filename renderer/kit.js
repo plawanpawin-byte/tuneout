@@ -144,3 +144,22 @@ document.addEventListener('keydown', (e) => {
   const b = [...m.querySelectorAll('button')].find((x) => /^(cancel|close|done|back|ok)$/i.test(x.textContent.trim()));
   if (b) { e.preventDefault(); b.click(); }
 });
+
+// Dialogs take focus when they open and hand it back to the previous control when they close.
+(function () {
+  const stack = [];
+  new MutationObserver((muts) => {
+    for (const mu of muts) {
+      mu.addedNodes.forEach((n) => {
+        if (n.nodeType === 1 && n.classList.contains('modal-back')) {
+          stack.push({ node: n, prev: document.activeElement });
+          if (!n.contains(document.activeElement)) { const f = n.querySelector('textarea,input,select,button'); if (f) f.focus(); }
+        }
+      });
+      mu.removedNodes.forEach((n) => {
+        const i = stack.findIndex((s) => s.node === n);
+        if (i >= 0) { const s = stack.splice(i, 1)[0]; if (s.prev && s.prev.isConnected && s.prev !== document.body) s.prev.focus(); }
+      });
+    }
+  }).observe(document.body, { childList: true });
+})();
