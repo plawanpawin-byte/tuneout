@@ -1,7 +1,7 @@
 {
   "name": "tuneout",
   "productName": "Tuneout",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Record and edit audio with waveforms, effects and fades.",
   "main": "main.js",
   "author": "Lookout",

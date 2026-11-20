@@ -59,7 +59,7 @@ const toolbar = h('div', { class: 'toolbar' });
 const wave = h('canvas', { style: 'flex:1;min-height:0;width:100%;display:block;background:#1c1c1c;cursor:text' });
 const ruler = h('canvas', { style: 'height:22px;width:100%;display:block;background:#262626' });
 const center = h('div', { style: 'flex:1;min-width:0;display:flex;flex-direction:column;min-height:0' }, ruler, wave);
-const right = h('div', { class: 'sidebar right', style: 'width:250px;overflow:auto' });
+const right = h('div', { class: 'sidebar right', style: 'width:272px;overflow-x:hidden;overflow-y:auto' });
 const main = h('div', { class: 'main', style: 'flex:1;min-height:0;min-width:0;width:100%;overflow:hidden' }, center, right);
 const status = h('div', { class: 'status' });
 app.append(toolbar, main, status);
@@ -84,12 +84,12 @@ function renderRight() {
   const hz = h('input', { 'aria-label': 'Filter frequency in Hz', type: 'number', value: 120, min: 20, max: 20000, style: 'width:70px' });
   row(h('span', { text: 'Filter' }), hz, h('span', { text: 'Hz' }));
   row(btn('Low cut', () => filter('highpass', +hz.value)), btn('High cut', () => filter('lowpass', +hz.value)), btn('Bass boost', () => filter('lowshelf', +hz.value, 6)), btn('Treble boost', () => filter('highshelf', +hz.value, 6)));
-  const sp = h('select', {}, ...[['0.5', 'Half speed (lower pitch)'], ['0.75', '0.75x'], ['1.25', '1.25x'], ['1.5', '1.5x'], ['2', 'Double speed (higher pitch)']].map(([v, t]) => h('option', { value: v, text: t })));
+  const sp = h('select', {}, ...[['0.5', 'Half speed (low pitch)'], ['0.75', '0.75x'], ['1.25', '1.25x'], ['1.5', '1.5x'], ['2', 'Double speed (high pitch)']].map(([v, t]) => h('option', { value: v, text: t })));
   sect('Speed and pitch'); row(sp, btn('Apply', () => speed(+sp.value)));
   sect('Noise reduction');
   const nr = h('input', { 'aria-label': 'Noise reduction strength in dB', type: 'number', value: 18, min: 1, max: 60, style: 'width:60px' });
   row(h('span', { text: 'Strength' }), nr, h('span', { text: 'dB' }));
-  row(btn('Reduce noise', () => denoise(+nr.value, false)), btn('Learn from selection', () => denoise(+nr.value, true)));
+  row(btn('Reduce noise', () => denoise(+nr.value, false)), btn('Learn noise', () => denoise(+nr.value, true)));
   right.append(h('div', { class: 'muted', style: 'font-size:12px;line-height:1.5', text: 'Learn from selection: select a stretch that is only background noise, and it is removed from the whole track.' }));
   sect('Tracks');
   tracks.forEach((t, j) => {
