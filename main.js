@@ -57,9 +57,14 @@ ipcMain.handle('file:open', async (_e, opts = {}) => {
   return out;
 });
 
+function safeName(n) {
+  const t = String(n || 'untitled').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_').replace(/^[ .]+|[ .]+$/g, '');
+  return /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(t) || !t ? '_' + t : t;
+}
+
 ipcMain.handle('file:save', async (_e, opts = {}) => {
   const r = await dialog.showSaveDialog(win, {
-    defaultPath: opts.name, filters: filters(opts.filters),
+    defaultPath: safeName(opts.name), filters: filters(opts.filters),
   });
   if (r.canceled || !r.filePath) return null;
   if (opts.data) fs.writeFileSync(r.filePath, Buffer.from(opts.data));
