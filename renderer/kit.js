@@ -135,3 +135,12 @@
   function start() { mo.observe(document.body, { childList: true, subtree: true, characterData: true }); sweep(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+// Esc closes the topmost dialog by pressing its Cancel/Close button (when it has one).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || e.defaultPrevented) return;
+  const m = [...document.querySelectorAll('.modal-back')].pop();
+  if (!m) return;
+  const b = [...m.querySelectorAll('button')].find((x) => /^(cancel|close|done|back|ok)$/i.test(x.textContent.trim()));
+  if (b) { e.preventDefault(); b.click(); }
+});
