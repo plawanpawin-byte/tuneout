@@ -80,7 +80,7 @@ function renderRight() {
   row(btn('Fade in', () => apply('Fade in', (d) => { for (let i = 0; i < d.length; i++) d[i] *= i / d.length; })), btn('Fade out', () => apply('Fade out', (d) => { for (let i = 0; i < d.length; i++) d[i] *= 1 - i / d.length; })));
   row(btn('Normalize', normalize), btn('Reverse', () => apply('Reverse', (d) => d.reverse())), btn('Invert', () => apply('Invert', (d) => { for (let i = 0; i < d.length; i++) d[i] = -d[i]; })));
   const db = h('input', { 'aria-label': 'Gain in dB', type: 'number', value: 3, step: 1, style: 'width:60px' });
-  row(h('span', { text: 'Gain' }), db, h('span', { text: 'dB' }), btn('Apply', () => { const g = Math.pow(10, +db.value / 20); apply('Gain', (d) => { for (let i = 0; i < d.length; i++) d[i] = clamp(d[i] * g, -1, 1); }); }));
+  row(h('span', { text: 'Gain' }), db, h('span', { text: 'dB' }), btn('Apply', () => { const dbv = +db.value; if (!Number.isFinite(dbv) || Math.abs(dbv) > 60) { toast('Gain must be between -60 and 60 dB'); return; } const g = Math.pow(10, dbv / 20); apply('Gain', (d) => { for (let i = 0; i < d.length; i++) d[i] = clamp(d[i] * g, -1, 1); }); }));
   const hz = h('input', { 'aria-label': 'Filter frequency in Hz', type: 'number', value: 120, min: 20, max: 20000, style: 'width:70px' });
   row(h('span', { text: 'Filter' }), hz, h('span', { text: 'Hz' }));
   row(btn('Low cut', () => filter('highpass', +hz.value)), btn('High cut', () => filter('lowpass', +hz.value)), btn('Bass boost', () => filter('lowshelf', +hz.value, 6)), btn('Treble boost', () => filter('highshelf', +hz.value, 6)));
