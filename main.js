@@ -141,6 +141,7 @@ function resolveOut(out) {
     const dir = pathOf(out.dir);
     if (!fs.statSync(dir).isDirectory()) throw new Error('not a folder');
     let base = path.basename(String(out.name || 'output')).replace(/[<>:"\/\\|?*\u0000-\u001f]/g, '_').slice(0, 120) || 'output';
+    if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(base)) base = '_' + base;
     const ext = path.extname(base); const stem = base.slice(0, base.length - ext.length);
     if (!/^\.[a-z0-9]{2,5}$/i.test(ext)) throw new Error('bad file name');
     let p = path.join(dir, base), n = 1;
