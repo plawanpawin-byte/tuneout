@@ -50,7 +50,7 @@ toolbar.append(btn('Open', openAudio), btn('Save as', exportAudio), h('span', { 
 function renderRight() {
   right.textContent = '';
   const sect = (t) => right.append(h('h3', { text: t }));
-  const row = (...b) => right.append(h('div', { style: 'display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px' }, ...b));
+  const row = (...b) => right.append(h('div', { class: b.every((x) => x && x.tagName === 'BUTTON') ? 'brow' : 'frow' }, ...b));
   sect('Edit');
   row(btn('Cut', cut), btn('Copy', copy), btn('Paste', paste), btn('Delete', del));
   row(btn('Trim to selection', trim), btn('Silence', () => apply('Silence', (d) => d.fill(0))), btn('Select all', () => { sel = { a: 0, b: N() }; draw(); renderStatus(); }));
