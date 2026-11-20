@@ -313,7 +313,8 @@ async function doExport(kind, onlySel) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.target.matches('input,textarea,select')) return; const k = e.key.toLowerCase();
+  if (e.target.matches('input,textarea,select')) return;
+  if (document.querySelector('.modal-back') || (!e.ctrlKey && !e.metaKey && e.target.matches('select,button,[contenteditable]'))) return; const k = e.key.toLowerCase();
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
   else if (e.ctrlKey && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if (e.ctrlKey && k === 'y') { e.preventDefault(); redo(); }
