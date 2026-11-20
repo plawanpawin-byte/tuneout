@@ -1,6 +1,6 @@
 <p align="center"><img src="screenshots/banner.png" alt="Tuneout" width="100%"></p>
 
-<p align="center"><b>Record and edit audio</b><br>Version 1.0.2 for Windows · Free · Offline · No account</p>
+<p align="center"><b>Record and edit audio</b><br>Version 1.0.3 for Windows · Free · Offline · No account</p>
 
 <p align="center"><a href="https://github.com/plawanpawin-byte/tuneout/releases/latest"><b>Download Tuneout</b></a> · <a href="https://github.com/plawanpawin-byte/Lookout">All Lookout apps</a></p>
 
@@ -14,7 +14,7 @@ Tuneout is an audio editor. See your sound as a waveform, select a part with the
 
 **On this page:** [Screenshots](#see-it-in-action) · [Interface](#the-interface) · [Features](#everything-it-can-do) · [How to use it](#how-to-use-it) · [Shortcuts](#keyboard-shortcuts) · [Formats](#files-and-formats) · [Privacy](#private-by-design) · [Install](#install) · [Questions](#questions)
 
-## What is new in 1.0.2
+## What is new in 1.0.3
 
 A refreshed interface: every toolbar button now has a clear line icon, the app's mark sits at the top left, controls share one height and spacing, panels line up in tidy grids, and the toolbar keeps every button reachable on smaller windows by switching less important buttons to icons.
 

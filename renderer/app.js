@@ -24,6 +24,28 @@ let undoS = [], redoS = [], fileName = '', dirty = false;
 let actx = null, src = null, playing = false, playT0 = 0, playFrom = 0, playTo = 0, loop = false;
 let recording = null;
 const N = () => ch[0].length;
+// ---------- tracks (the active track is ch; the others live in tracks[]) ----------
+let tracks = [{ name: 'Track 1', l: ch[0], r: ch[1], mute: false, solo: false, gain: 1 }], ti = 0;
+function syncOut() { tracks[ti].l = ch[0]; tracks[ti].r = ch[1]; return tracks; }
+function totalLen() { syncOut(); return tracks.reduce((m, t) => Math.max(m, t.l.length), 0); }
+function mixed() {
+  syncOut(); const len = totalLen(); const L = new Float32Array(len), R = new Float32Array(len);
+  const solo = tracks.some((t) => t.solo);
+  for (const t of tracks) {
+    if (solo ? !t.solo : t.mute) continue;
+    const g = t.gain; for (let i = 0; i < t.l.length; i++) { L[i] += t.l[i] * g; R[i] += t.r[i] * g; }
+  }
+  if (tracks.length > 1) for (let i = 0; i < len; i++) { L[i] = clamp(L[i], -1, 1); R[i] = clamp(R[i], -1, 1); }
+  return [L, R];
+}
+function switchTrack(j) { if (j === ti || !tracks[j]) return; stop(); syncOut(); ti = j; ch = [tracks[j].l, tracks[j].r]; undoS = []; redoS = []; sel = { a: 0, b: 0 }; draw(); renderStatus(); }
+function addTrack(name, l, r) { stop(); syncOut(); tracks.push({ name: name || 'Track ' + (tracks.length + 1), l: l || new Float32Array(N()), r: r || new Float32Array(N()), mute: false, solo: false, gain: 1 }); switchTrack(tracks.length - 1); dirty = true; }
+function removeTrack() { if (tracks.length < 2) { toast('A project needs at least one track'); return; } if (!confirm('Remove "' + tracks[ti].name + '"?')) return; stop(); tracks.splice(ti, 1); ti = Math.min(ti, tracks.length - 1); ch = [tracks[ti].l, tracks[ti].r]; undoS = []; redoS = []; dirty = true; draw(); renderStatus(); }
+function shiftTrack(sec) {
+  if (!Number.isFinite(sec) || !sec || Math.abs(sec) > 3600) return; stop(); commit(); const n = Math.round(Math.abs(sec) * SR);
+  ch = ch.map((d) => { if (sec > 0) { const o = new Float32Array(d.length + n); o.set(d, n); return o; } return d.slice(Math.min(n, d.length)); });
+  draw(); renderStatus();
+}
 
 function snapshot() { return { l: ch[0].slice(), r: ch[1].slice(), sel: { ...sel } }; }
 function commit() { undoS.push(snapshot()); if (undoS.length > 12) undoS.shift(); redoS = []; dirty = true; }
@@ -64,6 +86,22 @@ function renderRight() {
   row(btn('Low cut', () => filter('highpass', +hz.value)), btn('High cut', () => filter('lowpass', +hz.value)), btn('Bass boost', () => filter('lowshelf', +hz.value, 6)), btn('Treble boost', () => filter('highshelf', +hz.value, 6)));
   const sp = h('select', {}, ...[['0.5', 'Half speed (lower pitch)'], ['0.75', '0.75x'], ['1.25', '1.25x'], ['1.5', '1.5x'], ['2', 'Double speed (higher pitch)']].map(([v, t]) => h('option', { value: v, text: t })));
   sect('Speed and pitch'); row(sp, btn('Apply', () => speed(+sp.value)));
+  sect('Noise reduction');
+  const nr = h('input', { type: 'number', value: 18, min: 1, max: 60, style: 'width:60px' });
+  row(h('span', { text: 'Strength' }), nr, h('span', { text: 'dB' }));
+  row(btn('Reduce noise', () => denoise(+nr.value, false)), btn('Learn from selection', () => denoise(+nr.value, true)));
+  right.append(h('div', { class: 'muted', style: 'font-size:12px;line-height:1.5', text: 'Learn from selection: select a stretch that is only background noise, and it is removed from the whole track.' }));
+  sect('Tracks');
+  tracks.forEach((t, j) => {
+    const g = h('input', { type: 'number', value: Math.round(20 * Math.log10(t.gain || 1e-6) * 10) / 10, step: 1, style: 'width:54px', title: 'Gain in dB', onchange: (e) => { t.gain = Math.pow(10, clamp(+e.target.value || 0, -60, 24) / 20); } });
+    right.append(h('div', { class: 'frow' }, h('button', { class: 'btn' + (j === ti ? ' primary' : ''), style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis', text: t.name, onclick: () => switchTrack(j), ondblclick: () => { const n = prompt('Track name', t.name); if (n) { t.name = n.slice(0, 30); renderStatus(); } } }),
+      h('button', { class: 'btn' + (t.mute ? ' primary' : ''), text: 'M', title: 'Mute', onclick: () => { t.mute = !t.mute; renderStatus(); } }),
+      h('button', { class: 'btn' + (t.solo ? ' primary' : ''), text: 'S', title: 'Solo', onclick: () => { t.solo = !t.solo; renderStatus(); } }), g));
+  });
+  row(btn('Add track from file', addTrackFile), btn('Add empty track', () => addTrack()), btn('Remove track', removeTrack));
+  const sh = h('input', { type: 'number', value: 1, step: 0.5, style: 'width:60px' });
+  row(h('span', { text: 'Shift track' }), sh, h('span', { text: 's' }), btn('Apply', () => shiftTrack(+sh.value)));
+  if (tracks.length > 1) row(btn('Mix down to one track', mixDown));
   sect('Generate');
   const secs = h('input', { type: 'number', value: 1, min: 0.1, step: 0.5, style: 'width:60px' });
   row(h('span', { text: 'Silence' }), secs, h('span', { text: 's' }), btn('Insert', () => insertSilence(+secs.value)));
@@ -149,15 +187,59 @@ function speed(f) {
   sel = { a: 0, b: 0 }; fit(); renderStatus();
 }
 
+async function runWav(af, a, b) {
+  const t = await window.host.tempFile(wavBytes(a, b, ch), 'wav');
+  try {
+    const r = await window.host.run({ args: ['-i', '{in0}', '-af', af, '-ar', String(SR), '-ac', '2', '-c:a', 'pcm_s16le', '{out}'], inputs: [t.id], out: 'temp:wav' });
+    const bytes = await window.host.readFile(r.id); window.host.removeFile(r.id);
+    return await ensureCtx().decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  } finally { window.host.removeFile(t.id); }
+}
+async function denoise(db, learn) {
+  if (!N()) return; if (!(db >= 1 && db <= 60)) { toast('Strength must be 1 to 60 dB'); return; }
+  let a = 0, b = N(), nf = -40;
+  if (learn) {
+    if (!hasSel()) { toast('Select a stretch of pure background noise first'); return; }
+    const [s0, s1] = range(); let sum = 0, n = 0;
+    for (const d of ch) for (let i = s0; i < s1; i++) { sum += d[i] * d[i]; n++; }
+    nf = clamp(Math.round(10 * Math.log10(sum / Math.max(1, n) + 1e-12)) + 3, -80, -20);
+  } else if (hasSel()) [a, b] = range();
+  stop(); toast('Reducing noise...');
+  try {
+    const dec = await runWav('afftdn=nr=' + Math.round(db) + ':nf=' + nf + ':tn=1', a, b);
+    commit();
+    const n = Math.min(dec.length, b - a);
+    for (let k = 0; k < 2; k++) { const d = dec.getChannelData(Math.min(k, dec.numberOfChannels - 1)); for (let i = 0; i < n; i++) ch[k][a + i] = clamp(d[i], -1, 1); }
+    draw(); renderStatus(); toast('Noise reduced' + (learn ? ' (floor ' + nf + ' dB)' : ''));
+  } catch (e) { toast('Noise reduction failed: ' + String(e.message || e).split('\n').pop().slice(0, 80)); }
+}
+async function addTrackFile() {
+  const f = (await window.host.openFiles({ read: false, filters: FILTERS }))[0]; if (!f) return;
+  try {
+    toast('Reading ' + f.name + '...');
+    const r = await window.host.run({ args: ['-i', '{in0}', '-vn', '-ar', String(SR), '-ac', '2', '-c:a', 'pcm_s16le', '{out}'], inputs: [f.id], out: 'temp:wav' });
+    const bytes = await window.host.readFile(r.id); window.host.removeFile(r.id);
+    const buf = await ensureCtx().decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    const l = buf.getChannelData(0).slice(), rr = (buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0)).slice();
+    if (!N()) { ch = [l, rr]; tracks[ti].name = f.name.slice(0, 30); fileName = f.name; fit(); renderStatus(); return; }
+    addTrack(f.name.slice(0, 30), l, rr); fit(); renderStatus();
+  } catch (e) { toast('Cannot open this file: ' + String(e.message || e).split('\n').pop().slice(0, 80)); }
+}
+function mixDown() {
+  if (tracks.length < 2) return; stop(); const m = mixed();
+  tracks = [{ name: 'Mix', l: m[0], r: m[1], mute: false, solo: false, gain: 1 }]; ti = 0; ch = [m[0], m[1]]; undoS = []; redoS = []; sel = { a: 0, b: 0 }; dirty = true; fit(); renderStatus(); toast('Tracks mixed into one');
+}
+
 // ---------- playback ----------
 function ensureCtx() { if (!actx) actx = new AudioContext({ sampleRate: SR }); return actx; }
 function currentPos() { return clamp(playFrom + Math.round((actx.currentTime - playT0) * SR), 0, N()); }
 function togglePlay() { playing ? stop(true) : play(); }
 function play() {
   if (!N()) return; const c = ensureCtx(); c.resume();
-  const a = hasSel() ? Math.min(sel.a, sel.b) : sel.a, b = hasSel() ? Math.max(sel.a, sel.b) : N();
+  const pc = tracks.length > 1 ? mixed() : ch, TL = pc[0].length;
+  const a = hasSel() ? Math.min(sel.a, sel.b) : sel.a, b = hasSel() ? Math.max(sel.a, sel.b) : TL;
   if (a >= b) return;
-  const buf = c.createBuffer(2, b - a, SR); buf.copyToChannel(ch[0].subarray(a, b), 0); buf.copyToChannel(ch[1].subarray(a, b), 1);
+  const buf = c.createBuffer(2, b - a, SR); buf.copyToChannel(pc[0].subarray(a, b), 0); buf.copyToChannel(pc[1].subarray(a, b), 1);
   src = c.createBufferSource(); src.buffer = buf; src.loop = loop && hasSel(); src.connect(c.destination);
   src.onended = () => { if (src === s2) { playing = false; bPlay.textContent = 'Play'; draw(); } }; const s2 = src;
   playFrom = a; playTo = b; playT0 = c.currentTime; src.start(); playing = true; bPlay.textContent = 'Pause'; tick();
@@ -197,14 +279,16 @@ async function openAudio() {
     const bytes = await window.host.readFile(r.id); window.host.removeFile(r.id);
     const buf = await ensureCtx().decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
     ch = [buf.getChannelData(0).slice(), (buf.numberOfChannels > 1 ? buf.getChannelData(1) : buf.getChannelData(0)).slice()];
+    tracks = [{ name: f.name.slice(0, 30), l: ch[0], r: ch[1], mute: false, solo: false, gain: 1 }]; ti = 0;
     sel = { a: 0, b: 0 }; undoS = []; redoS = []; fileName = f.name; dirty = false; fit(); renderStatus();
   } catch (e) { toast('Cannot open this file: ' + String(e.message || e).split('\n').pop().slice(0, 80)); }
 }
-function wavBytes(a, b) {
+function wavBytes(a, b, src) {
+  const cc = src || (tracks.length > 1 ? mixed() : ch);
   const n = b - a, data = new DataView(new ArrayBuffer(44 + n * 4));
   const w = (o, s) => { for (let i = 0; i < s.length; i++) data.setUint8(o + i, s.charCodeAt(i)); };
   w(0, 'RIFF'); data.setUint32(4, 36 + n * 4, true); w(8, 'WAVE'); w(12, 'fmt '); data.setUint32(16, 16, true); data.setUint16(20, 1, true); data.setUint16(22, 2, true); data.setUint32(24, SR, true); data.setUint32(28, SR * 4, true); data.setUint16(32, 4, true); data.setUint16(34, 16, true); w(36, 'data'); data.setUint32(40, n * 4, true);
-  let o = 44; for (let i = a; i < b; i++) { for (let k = 0; k < 2; k++) { const v = clamp(ch[k][i], -1, 1); data.setInt16(o, v < 0 ? v * 32768 : v * 32767, true); o += 2; } }
+  let o = 44; for (let i = a; i < b; i++) { for (let k = 0; k < 2; k++) { const v = clamp(cc[k][i] || 0, -1, 1); data.setInt16(o, v < 0 ? v * 32768 : v * 32767, true); o += 2; } }
   return new Uint8Array(data.buffer);
 }
 const OUT = { mp3: ['MP3', ['-c:a', 'libmp3lame', '-b:a', '256k']], wav: ['WAV', ['-c:a', 'pcm_s16le']], flac: ['FLAC', ['-c:a', 'flac']], m4a: ['AAC (M4A)', ['-c:a', 'aac', '-b:a', '256k']], opus: ['Opus', ['-c:a', 'libopus', '-b:a', '160k']] };
@@ -217,7 +301,7 @@ function exportAudio() {
   document.body.append(back);
 }
 async function doExport(kind, onlySel) {
-  const [a, b] = onlySel && hasSel() ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b)] : [0, N()];
+  const [a, b] = onlySel && hasSel() ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b)] : [0, totalLen()];
   const base = (fileName || 'recording').replace(/\.[^.]+$/, '');
   const dest = await window.host.saveFile({ name: base + '-edit.' + kind, filters: [[OUT[kind][0], [kind]]] }); if (!dest) return;
   try {
